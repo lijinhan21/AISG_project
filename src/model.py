@@ -233,7 +233,7 @@ class REx(Loss):
 
 @loss_register.register
 class InvRat(Loss):
-    def __call__(self, predict, target, env, network:nn.Module, risk:Loss):
+    def __call__(self, predict, env_predict, target, env, network:nn.Module, risk:Loss):
         """
         TODO: calculate InvRat loss
         Parameters:
@@ -249,12 +249,17 @@ class InvRat(Loss):
         """
         
         loss = risk(predict, target, env, reduction='none')
+        env_enable_loss = risk(env_predict, target, env, reduction='none')
         
-        invrat_loss = 0
+        invrat_loss = None
         env_list = env.unique()
         for env_id in env_list:
             loss_env = loss[env==env_id].mean()
-            optimal_loss_env = 0 # TODO, use the loss of another environment-based model
-            invrat_loss = max(invrat_loss, optimal_loss_env - loss_env)
+            optimal_loss_env = env_enable_loss[env==env_id].mean()
+            
+            if invrat_loss is None:
+                invrat_loss = loss_env - optimal_loss_env
+            else:
+                invrat_loss = max(invrat_loss, loss_env - optimal_loss_env)
         
         return invrat_loss

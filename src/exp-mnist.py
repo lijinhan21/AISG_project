@@ -100,6 +100,23 @@ def run_exp():
         trainer = trainer_register[args.trainer](device, model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
     elif args.trainer == 'groupDRO':
         trainer = trainer_register['ERM'](device, model, optimizer, dataset, groupDRO(bce_loss(), device, n_env=2, eta=args.eta), reg_object, **args.__dict__)    
+    elif args.trainer == 'InvRat':
+        env_model = MLP(input_dim = dataset.feature_dim + 1, 
+            hidden_size = args.hidden_dim, 
+            drop_rate = args.drop_rate,
+            batchnorm = args.batchnorm,
+            bias = args.bias
+        )
+        env_optimizer = optim.Adam([
+                {'params': parameter_list_wo_decay},
+                {'params':parameter_list_decay, 'weight_decay': args.weight_decay}
+            ], 
+            lr=args.learning_rate
+        )
+        env_loss_fn = bce_loss()
+        args.env_optimizer = env_optimizer
+        args.env_loss_fn = env_loss_fn
+        trainer = trainer_register['InvRat'](device, model, env_model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
     else:
         raise NotImplementedError
 
