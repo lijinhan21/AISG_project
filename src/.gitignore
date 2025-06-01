@@ -2,6 +2,10 @@ __pycache__/
 .ipynb_checkpoints/*
 *.png
 data/*/*
+data/
+categorized_data/
+logs/
+saved_models/
 !data/*/preprocess*
 *.pyc
 **/*.txt

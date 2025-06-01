@@ -12,7 +12,14 @@ from torchvision import transforms
 from dataset import *
 from trainer import *
 from model import *
-from preprocessing import ColoredMNIST
+from datasets import (
+    ColoredMNIST, 
+    SyntheticFolktablesDataset, 
+    CategoryBasedColoredMNIST, 
+    CategoryBasedSyntheticFolktables, 
+    FourEnvColoredMNIST, 
+    FourEnvSyntheticFolktables
+)
 
 
 parser = argparse.ArgumentParser()
@@ -24,19 +31,20 @@ parser.add_argument('--drop_rate', default=0, type=float)
 parser.add_argument('--weight_decay', default=0, type=float)
 parser.add_argument('--bias', action='store_true')
 parser.add_argument('--batchnorm', action='store_true')
-parser.add_argument('--hidden_dim', default=[64,16], type=int, nargs='+')
+parser.add_argument('--hidden_dim', default=[8], type=int, nargs='+')
 parser.add_argument('--batch_size', default=1024, type=int)
 parser.add_argument('--dataset_path', default='./data', type=str)
 parser.add_argument('--split', default=['test'], type=str, nargs='+')
 parser.add_argument('--iteration', default=400, type=int)
 parser.add_argument('--log_steps', default=50, type=int)
 parser.add_argument('--evaluation_steps', default=20, type=int)
-parser.add_argument('--metric_list', default=['Accuracy','AUC','F1_macro'], type=str, nargs='+')
+parser.add_argument('--metric_list', default=['Accuracy','AUC','F1_macro', 'PerEnvironmentAccuracy'], type=str, nargs='+')
 parser.add_argument('--eta', default=0.05, type=float)
 parser.add_argument('--model_init', default='default', type=str)
 parser.add_argument('--trainer', default='ERM', type=str)
 parser.add_argument('--reg_name', default=None, type=str)
 parser.add_argument('--reg_lambda', default=50, type=float)
+parser.add_argument('--task', default='ColoredMNIST', type=str, choices=['ColoredMNIST', 'SyntheticFolktables', 'CategoryBasedColoredMNIST', 'CategoryBasedSyntheticFolktables', 'FourEnvColoredMNIST', 'FourEnvSyntheticFolktables'])
 
 args = parser.parse_args()
 print (args)
@@ -47,15 +55,61 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed_all(args.seed)
 torch.backends.cudnn.deterministic = True
+
+if args.task == 'ColoredMNIST':
     
-download = ColoredMNIST(root=args.dataset_path, env='all_train',
+    download = ColoredMNIST(root=args.dataset_path, env='all_train',
                  transform=transforms.Compose([
                      transforms.ToTensor(),
                      transforms.Normalize((0.1307, 0.1307, 0.), (0.3081, 0.3081, 0.3081))
                    ]))
 
-args.dataset_path = os.path.join(args.dataset_path, 'ColoredMNIST')
+    args.dataset_path = os.path.join(args.dataset_path, 'ColoredMNIST')
+    
+elif args.task == 'SyntheticFolktables':
+    
+    mean = torch.tensor([1.84915718e+01, 4.02880048e+03, 3.80885041e+01, 1.46956721e+00, 4.32242068e+01])
+    std = torch.tensor([3.89205088e+00, 2.69650006e+03, 1.29503584e+01, 4.99072986e-01, 1.50857089e+01])
+    transform = lambda x: (x - mean) / std
+    download = SyntheticFolktablesDataset(root=args.dataset_path, env='all_train', transform=transform)
 
+    args.dataset_path = os.path.join(args.dataset_path, 'synthetic_folktables')
+
+elif args.task == 'CategoryBasedColoredMNIST':
+    
+    download = CategoryBasedColoredMNIST(root=args.dataset_path, env='all_train',
+                 transform=transforms.Compose([
+                     transforms.ToTensor(),
+                     transforms.Normalize((0.1307, 0.1307, 0.), (0.3081, 0.3081, 0.3081))
+                   ]))
+    args.dataset_path = os.path.join(args.dataset_path, 'category_based_colored_mnist')
+
+elif args.task == 'CategoryBasedSyntheticFolktables':
+    
+    mean = torch.tensor([1.84915718e+01, 4.02880048e+03, 3.80885041e+01, 1.46956721e+00, 4.32242068e+01])
+    std = torch.tensor([3.89205088e+00, 2.69650006e+03, 1.29503584e+01, 4.99072986e-01, 1.50857089e+01])
+    transform = lambda x: (x - mean) / std
+    
+    download = CategoryBasedSyntheticFolktables(root=args.dataset_path, env='all_train', transform=transform)
+    args.dataset_path = os.path.join(args.dataset_path, 'category_based_synthetic_folktables')
+
+elif args.task == 'FourEnvColoredMNIST':
+    
+    download = FourEnvColoredMNIST(root=args.dataset_path, env='all_train',
+                 transform=transforms.Compose([
+                     transforms.ToTensor(),
+                     transforms.Normalize((0.1307, 0.1307, 0.), (0.3081, 0.3081, 0.3081))
+                   ]))
+    args.dataset_path = os.path.join(args.dataset_path, 'four_env_colored_mnist')
+
+elif args.task == 'FourEnvSyntheticFolktables':
+    
+    mean = torch.tensor([1.84915718e+01, 4.02880048e+03, 3.80885041e+01, 1.46956721e+00, 4.32242068e+01])
+    std = torch.tensor([3.89205088e+00, 2.69650006e+03, 1.29503584e+01, 4.99072986e-01, 1.50857089e+01])
+    transform = lambda x: (x - mean) / std
+    
+    download = FourEnvSyntheticFolktables(root=args.dataset_path, env='all_train', transform=transform)
+    args.dataset_path = os.path.join(args.dataset_path, 'four_env_synthetic_folktables')
 
 def run_exp():
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
@@ -98,8 +152,12 @@ def run_exp():
     
     if args.trainer == 'ERM':
         trainer = trainer_register[args.trainer](device, model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
+    elif args.trainer == 'CategoryReweightedERM':
+        trainer = trainer_register[args.trainer](device, model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
     elif args.trainer == 'groupDRO':
         trainer = trainer_register['ERM'](device, model, optimizer, dataset, groupDRO(bce_loss(), device, n_env=2, eta=args.eta), reg_object, **args.__dict__)    
+    elif args.trainer == 'ChiSquareDRO':
+        trainer = trainer_register['ERM'](device, model, optimizer, dataset, ChiSquareDRO(bce_loss(), device, n_env=2, eta=args.eta), reg_object, **args.__dict__)
     elif args.trainer == 'InvRat':
         env_model = MLP(input_dim = dataset.feature_dim + 1, 
             hidden_size = args.hidden_dim, 
@@ -145,8 +203,11 @@ if __name__ == '__main__':
 
     metric_result = {}
     for k,v in metric_dict_list.items():
-        metric_result[k+'mean'] = np.mean(v)
-        metric_result[k+'std'] = np.std(v)
+        if k == 'PerEnvironmentAccuracy_test':
+            print(f"PerEnvironmentAccuracy_test: {v}")
+        else:
+            metric_result[k+'mean'] = np.mean(v)
+            metric_result[k+'std'] = np.std(v)
     print ('Summary:', metric_result)
 
 

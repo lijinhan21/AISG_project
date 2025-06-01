@@ -2,6 +2,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from register import Register
 
 class Output(nn.Module):
@@ -67,6 +68,46 @@ class MLP(nn.Module):
 
     def head(self):
         return self.output_layer
+
+
+class Net(nn.Module):
+    """
+    Simple MLP for Colored MNIST experiments.
+    """
+    def __init__(self):
+        super(Net, self).__init__()
+        self.fc1 = nn.Linear(3 * 28 * 28, 512)
+        self.fc2 = nn.Linear(512, 512)
+        self.fc3 = nn.Linear(512, 1)
+
+    def forward(self, x):
+        x = x.view(-1, 3 * 28 * 28)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        logits = self.fc3(x).flatten()
+        return logits
+
+
+class ConvNet(nn.Module):
+    """
+    Convolutional neural network for Colored MNIST experiments.
+    """
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4 * 4 * 50, 500)
+        self.fc2 = nn.Linear(500, 1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(-1, 4 * 4 * 50)
+        x = F.relu(self.fc1(x))
+        logits = self.fc2(x).flatten()
+        return logits
      
     
 def reset_parameters(module:nn.Module, method='default'):
@@ -263,3 +304,197 @@ class InvRat(Loss):
                 invrat_loss = max(invrat_loss, loss_env - optimal_loss_env)
         
         return invrat_loss
+
+@loss_register.register
+class ChiSquareDRO(Loss):
+    def __init__(self, risk:Loss, device, n_env=2, eta=0.05, rho=10, beta=0.01):
+        super(ChiSquareDRO, self).__init__()
+        self.risk = risk                    # Base loss function
+        self.device = device
+        self.n_env = n_env                  # Number of environments
+        self.rho = rho                      # Chi-square radius parameter
+        self.beta = beta                    # Smoothing parameter
+        self.env_weights = torch.ones(n_env, device=device) / n_env  # Initial weights
+        
+    def __call__(self, predict, target, env, reduction='mean'):
+        """
+        Calculate Chi-Square DRO loss
+        Parameters:
+            predict: (batch_size) model output
+            target: (batch_size) label
+            env: (batch_size) environment id
+            reduction: 'mean' or 'none'
+                if reduction is 'none', return loss for each sample
+                if reduction is 'mean', return Chi-Square DRO loss (scalar)
+                
+        Based on: Namkoong & Duchi, "Stochastic Gradient Methods for 
+        Distributionally Robust Optimization with f-divergences"
+        """
+        # Get per-sample losses
+        sample_losses = self.risk(predict, target, env, reduction='none')
+        
+        if reduction == 'none':
+            return sample_losses
+            
+        # Calculate environment-specific losses
+        env_losses = []
+        env_sizes = []
+        
+        for i in range(self.n_env):
+            env_mask = (env == i)
+            if env_mask.sum() > 0:
+                env_losses.append(sample_losses[env_mask].mean())
+                env_sizes.append(env_mask.sum().item())
+            else:
+                env_losses.append(torch.tensor(0.0, device=self.device))
+                env_sizes.append(0)
+                
+        env_losses = torch.stack(env_losses)
+        env_sizes = torch.tensor(env_sizes, device=self.device).float()
+        valid_envs = (env_sizes > 0)
+        
+        # Calculate the optimal weights using chi-square formulation
+        if valid_envs.sum() > 1:  # Need at least two environments
+            # Normalize environment sizes
+            env_probs = env_sizes[valid_envs] / env_sizes[valid_envs].sum()
+            
+            # Center the losses (optional but stabilizes optimization)
+            centered_losses = env_losses[valid_envs] - env_losses[valid_envs].mean()
+            
+            # Compute chi-square weights
+            delta = torch.clamp(1 + self.rho * centered_losses, min=self.beta)
+            weights = env_probs * delta
+            
+            # Normalize weights
+            weights = weights / weights.sum()
+            
+            # Update environment weights for tracking
+            new_weights = torch.zeros_like(self.env_weights)
+            new_weights[valid_envs] = weights
+            self.env_weights = new_weights
+            
+            # Compute weighted loss
+            total_loss = (env_losses[valid_envs] * weights).sum()
+        else:
+            # If only one environment has data, use standard average
+            total_loss = env_losses[valid_envs].mean() if valid_envs.sum() > 0 else 0
+            
+        return total_loss
+    
+    def get_weights(self):
+        """Return the current environment weights for analysis"""
+        return self.env_weights.detach().cpu().numpy()
+
+# Variational Autoencoder for generating latent space with values in [0,1]
+class VAE(nn.Module):
+    def __init__(self, input_dim, hidden_dim=[128, 64], latent_dim=5, drop_rate=0, batchnorm=False):
+        super(VAE, self).__init__()
+        
+        # Encoder
+        encoder_layers = []
+        prev_dim = input_dim
+        for dim in hidden_dim:
+            encoder_layers.append(nn.Linear(prev_dim, dim))
+            if batchnorm:
+                encoder_layers.append(nn.BatchNorm1d(dim))
+            encoder_layers.append(nn.ReLU())
+            encoder_layers.append(nn.Dropout(p=drop_rate))
+            prev_dim = dim
+            
+        self.encoder = nn.Sequential(*encoder_layers)
+        
+        # Latent space parameters
+        self.mu = nn.Linear(hidden_dim[-1], latent_dim)
+        self.log_var = nn.Linear(hidden_dim[-1], latent_dim)
+        
+        # Decoder
+        decoder_layers = []
+        prev_dim = latent_dim
+        for dim in reversed(hidden_dim):
+            decoder_layers.append(nn.Linear(prev_dim, dim))
+            if batchnorm:
+                decoder_layers.append(nn.BatchNorm1d(dim))
+            decoder_layers.append(nn.ReLU())
+            decoder_layers.append(nn.Dropout(p=drop_rate))
+            prev_dim = dim
+            
+        decoder_layers.append(nn.Linear(hidden_dim[0], input_dim))
+        self.decoder = nn.Sequential(*decoder_layers)
+        
+        self.latent_dim = latent_dim
+        
+    def encode(self, x):
+        h = self.encoder(x)
+        mu = self.mu(h)
+        log_var = self.log_var(h)
+        return mu, log_var
+        
+    def reparameterize(self, mu, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        z = mu + eps * std
+        # Constrain latent space to [0,1] with sigmoid
+        z = torch.sigmoid(z)
+        return z
+    
+    def decode(self, z):
+        return self.decoder(z)
+    
+    def forward(self, x):
+        mu, log_var = self.encode(x)
+        z = self.reparameterize(mu, log_var)
+        x_reconstructed = self.decode(z)
+        return x_reconstructed, mu, log_var, z
+    
+    def get_latent(self, x):
+        """Get latent representation for input"""
+        with torch.no_grad():
+            mu, log_var = self.encode(x)
+            z = self.reparameterize(mu, log_var)
+        return z
+
+def categorize_latent_samples(z):
+    """
+    Categorize samples based on 5D latent space into 32 categories
+    Each dimension has 2 conditions: > 0.5 or <= 0.5
+    
+    Args:
+        z: Tensor of shape (batch_size, 5) with values in [0,1]
+    
+    Returns:
+        categories: Tensor of shape (batch_size,) with values 0-31
+    """
+    batch_size = z.shape[0]
+    binary_encoding = (z > 0.5).int()  # Convert to binary: 1 if > 0.5, 0 if <= 0.5
+    
+    # Calculate category indices (0-31)
+    # Each sample's category is determined by treating the 5 binary values as a 5-bit number
+    categories = torch.zeros(batch_size, dtype=torch.long, device=z.device)
+    for i in range(5):
+        categories += binary_encoding[:, i] * (2 ** i)
+        
+    return categories
+
+@loss_register.register
+class VAELoss(Loss):
+    def __init__(self, reconstruction_weight=1.0, kl_weight=0.1):
+        super(VAELoss, self).__init__()
+        self.reconstruction_weight = reconstruction_weight
+        self.kl_weight = kl_weight
+        
+    def __call__(self, x, x_reconstructed, mu, log_var, reduction='mean'):
+        # Reconstruction loss (MSE)
+        recon_loss = torch.nn.functional.mse_loss(x_reconstructed, x, reduction='none').sum(dim=1)
+        
+        # KL divergence loss
+        kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
+        
+        # Total loss
+        total_loss = self.reconstruction_weight * recon_loss + self.kl_weight * kl_loss
+        
+        if reduction == 'none':
+            return total_loss
+        elif reduction == 'mean':
+            return total_loss.mean()
+        else:
+            raise NotImplementedError
