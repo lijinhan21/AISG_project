@@ -1,8 +1,8 @@
 # Exploring the Effect of Environment Partitioning and Data Balancing on Out-of-Distribution Generalization
 
-AISG大作业：如何构建“好”的学习数据？探究环境划分与数据平衡在分布外泛化任务中的效果
+《人工智能安全于治理技术前沿》大作业：如何构建“好”的学习数据？探究环境划分与数据平衡在分布外泛化任务中的效果
 
-For details of the project, please refer to the [project report](./report.md).
+For details of the project, please refer to the [project report](./report.pdf).
 
 ## Installation
 

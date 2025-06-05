@@ -1,5 +1,9 @@
 # 如何构建“好”的学习数据？探究环境划分与数据平衡在分布外泛化任务中的效果
 
+卢程达（2021010899） 李谨菡（2021011804）
+
+
+
 ## 引言
 
 在机器学习的应用中，模型常常需要在与训练数据分布不同的未知环境中做出预测，这就是分布外泛化（Out-of-Distribution, OOD）挑战。传统的经验风险最小化（ERM）方法在训练数据和测试数据同分布时表现良好，但在OOD场景下性能会急剧下降。提升模型在OOD场景下的表现，对构建真正鲁棒和可靠的人工智能系统是很重要的。
@@ -134,10 +138,14 @@ Group DRO的核心思想是将数据划分为若干个群体，并最小化这�
 
 例如，在猫狗分类任务中，如果“狗”的图片大多在“草地”背景，而“猫”的图片大多在“水边”背景，那么将“背景类型”作为划分环境的依据，就能形成有助于模型识别这种虚假相关的“好环境”。
 
-<img src="./images/水狗.png" alt="mnist" style="zoom:25%;" />
-<img src="./images/水猫.png" alt="mnist" style="zoom:25%;" />
-<img src="./images/草狗.png" alt="mnist" style="zoom:25%;" />
-<img src="./images/草猫.png" alt="mnist" style="zoom:25%;" />
+<table>
+<tr>
+<td><img src="./images/水狗.png" /></td>
+<td><img src="./images/水猫.png" /></td>
+<td><img src="./images/草狗.png" /></td>
+<td><img src="./images/草猫.png" /></td>
+</tr>
+</table>
 
 基于这种想法，我们提出了2步的环境划分策略：
 1.  **选择与标签尽可能相关的特征**：这一步的目标是识别出那些既可能包含真实判别信息，也可能引入虚假相关性的特征。具体来说，我们尝试了两种选择特征的方法：
@@ -315,10 +323,19 @@ Group DRO的核心思想是将数据划分为若干个群体，并最小化这�
 
 如表7和表8所示，在两个数据集上，简单地根据环境中样本数量的倒数对ERM的损失进行重加权的ReweightedERM方法，相比于标准的ERM，在CMNIST上没有显著提升，而在Synthetic Folktables上则有明显改善。这两者的区别可能源于任务难度，Synthetic Folktables数据集的输入只有5维，学起来相对容易，而CMNIST数据集的输入是28x28x3的图像，特征空间更复杂。
 
-<img src="./images/FourEnv_CMNIST_ERM.png" alt="CMNIST" style="zoom:50%;" />
-<img src="./images/FourEnv_CMNIST_CategoryReweightedERM.png" alt="Folktables" style="zoom:50%;" />
-<img src="./images/FourEnv_SyntheticFolktables_ERM.png" alt="CMNIST" style="zoom:50%;" />
-<img src="./images/FourEnv_SyntheticFolktables_CategoryReweightedERM.png" alt="Folktables" style="zoom:50%;" />
+<table>
+<tr>
+<td><img src="./images/FourEnv_CMNIST_ERM.png" /></td>
+<td><img src="./images/FourEnv_CMNIST_CategoryReweightedERM.png" /></td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td><img src="./images/FourEnv_SyntheticFolktables_ERM.png" /></td>
+<td><img src="./images/FourEnv_SyntheticFolktables_CategoryReweightedERM.png" /></td>
+</tr>
+</table>
 
 上图所示为训练曲线。最上面两张图为CMNIST数据集上ERM和ReweightedERM的训练损失曲线，下面两张图为Synthetic Folktables数据集上ERM和ReweightedERM的训练损失曲线。在CMNIST的两张图上，数据量多的两个环境的loss都始终低于另外两个环境；ReweightedERM虽然没有显著改变这种情况，但在一定程度上减小了不同环境之间的loss差距。在Synthetic Folktables的两张图上，ERM训练时，数据量多的两个环境的loss始终低于另外两条线、并且在逐渐下降，而数据量低的两个环境的loss竟在上升，说明模型overfit到了数据量多的环境所代表的虚假相关性里了；而ReweightedERM中各个环境的loss逐渐趋于一致，说明平衡数据集起到了一定的防止过拟合到虚假相关性的作用，逐渐学到了跨环境的不变性。
 
@@ -357,3 +374,15 @@ Group DRO的核心思想是将数据划分为若干个群体，并最小化这�
 * **真实数据的OOD现象**：在一些相对原始的真实数据集（如原始的Folktables，而非我们特意引入强虚假相关的Synthetic Folktables）上，OOD现象可能并没有在一些基准测试中设定的那么极端。这意味着在某些实际应用中，ERM配合良好的正则化可能已经足够。
 
 综上所述，构建“好”的学习数据以应对OOD泛化是一个复杂的问题，需要对数据特性、任务目标以及算法机制有深入的理解。环境划分和数据平衡是有潜力的策略，但其具体实现方式和有效性高度依赖于能否准确识别并针对性地处理数据中的虚假相关性。未来的工作可以进一步探索更自动化、自适应的环境发现和数据增强方法。
+
+
+
+
+
+## 参考文献
+
+1. Arjovsky, M., Bottou, L., Gulrajani, I., & Lopez-Paz, D. (2019). Invariant risk minimization. arXiv preprint arXiv:1907.02893.
+2. Krueger, David, et al. "Out-of-distribution generalization via risk extrapolation (rex)." International conference on machine learning. PMLR, 2021.
+3. Chang, Shiyu, et al. "Invariant rationalization." International Conference on Machine Learning. PMLR, 2020.
+4. Sagawa, Shiori, et al. "Distributionally robust neural networks for group shifts: On the importance of regularization for worst-case generalization." arXiv preprint arXiv:1911.08731 (2019).
+5. Lam, Henry. "Recovering best statistical guarantees via the empirical divergence-based distributionally robust optimization." Operations Research 67.4 (2019): 1090-1105.
