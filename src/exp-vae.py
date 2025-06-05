@@ -14,7 +14,7 @@ from torchvision import transforms
 from dataset import *
 from trainer import *
 from model import *
-from datasets import ColoredMNIST, FolktablesDataset, SyntheticFolktablesDataset
+from datasets import ColoredMNIST, SyntheticFolktablesDataset
 
 
 parser = argparse.ArgumentParser()
@@ -36,7 +36,8 @@ parser.add_argument('--evaluation_steps', default=100, type=int)
 parser.add_argument('--model_init', default='default', type=str)
 parser.add_argument('--reconstruction_weight', default=1.0, type=float)
 parser.add_argument('--kl_weight', default=1.0, type=float)
-parser.add_argument('--latent_dim', default=3, type=int)
+parser.add_argument('--latent_dim', default=5, type=int)
+parser.add_argument('--categorization_weight', default=1000.0, type=float)
 parser.add_argument('--save_model', action='store_true')
 parser.add_argument('--save_path', default='./saved_models', type=str)
 parser.add_argument('--task', default='ColoredMNIST', type=str, 
@@ -97,7 +98,8 @@ def run_vae():
     # Create loss function
     vae_loss = VAELoss(
         reconstruction_weight=args.reconstruction_weight,
-        kl_weight=args.kl_weight
+        kl_weight=args.kl_weight,
+        categorization_weight=args.categorization_weight
     )
 
     # Create trainer

@@ -18,7 +18,8 @@ from datasets import (
     CategoryBasedColoredMNIST, 
     CategoryBasedSyntheticFolktables, 
     FourEnvColoredMNIST, 
-    FourEnvSyntheticFolktables
+    FourEnvSyntheticFolktables,
+    FourEnvSyntheticFolktables2
 )
 
 
@@ -44,7 +45,7 @@ parser.add_argument('--model_init', default='default', type=str)
 parser.add_argument('--trainer', default='ERM', type=str)
 parser.add_argument('--reg_name', default=None, type=str)
 parser.add_argument('--reg_lambda', default=50, type=float)
-parser.add_argument('--task', default='ColoredMNIST', type=str, choices=['ColoredMNIST', 'SyntheticFolktables', 'CategoryBasedColoredMNIST', 'CategoryBasedSyntheticFolktables', 'FourEnvColoredMNIST', 'FourEnvSyntheticFolktables'])
+parser.add_argument('--task', default='ColoredMNIST', type=str, choices=['ColoredMNIST', 'SyntheticFolktables', 'CategoryBasedColoredMNIST', 'CategoryBasedSyntheticFolktables', 'FourEnvColoredMNIST', 'FourEnvSyntheticFolktables', 'FourEnvSyntheticFolktables2'])
 
 args = parser.parse_args()
 print (args)
@@ -110,6 +111,15 @@ elif args.task == 'FourEnvSyntheticFolktables':
     
     download = FourEnvSyntheticFolktables(root=args.dataset_path, env='all_train', transform=transform)
     args.dataset_path = os.path.join(args.dataset_path, 'four_env_synthetic_folktables')
+    
+elif args.task == 'FourEnvSyntheticFolktables2':
+    
+    mean = torch.tensor([1.84915718e+01, 4.02880048e+03, 3.80885041e+01, 1.46956721e+00, 4.32242068e+01])
+    std = torch.tensor([3.89205088e+00, 2.69650006e+03, 1.29503584e+01, 4.99072986e-01, 1.50857089e+01])
+    transform = lambda x: (x - mean) / std
+    
+    download = FourEnvSyntheticFolktables2(root=args.dataset_path, env='all_train', transform=transform)
+    args.dataset_path = os.path.join(args.dataset_path, 'four_env_synthetic_folktables2')   
 
 def run_exp():
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')
@@ -151,7 +161,10 @@ def run_exp():
         reg_object = loss_register[args.reg_name]()
     
     if args.trainer == 'ERM':
-        trainer = trainer_register[args.trainer](device, model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
+        if reg_object is not None:
+            trainer = trainer_register[args.trainer](device, model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
+        else: # Pure ERM, use erm_bce_loss
+            trainer = trainer_register[args.trainer](device, model, optimizer, dataset, erm_bce_loss(), reg_object, **args.__dict__)
     elif args.trainer == 'CategoryReweightedERM':
         trainer = trainer_register[args.trainer](device, model, optimizer, dataset, bce_loss(), reg_object, **args.__dict__)
     elif args.trainer == 'groupDRO':

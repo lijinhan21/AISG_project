@@ -17,8 +17,7 @@ import pandas as pd
 
 from dataset import *
 from model import *
-from datasets import ColoredMNIST, SyntheticFolktablesDataset, FolktablesDataset
-
+from datasets import ColoredMNIST, SyntheticFolktablesDataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--no_cuda', action='store_true')
@@ -109,9 +108,10 @@ def process_dataset(dataloader, set_name='train'):
             
             # Get latent vectors
             z = vae.get_latent(input_batch)
-            
+
             # Categorize samples
             categories = categorize_latent_samples(z)
+
             
             # Store data
             all_features.append(input_batch.cpu())

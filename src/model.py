@@ -161,6 +161,19 @@ class bce_loss(Loss):
             return total_loss
         else:
             raise NotImplementedError
+        
+@loss_register.register
+class erm_bce_loss(Loss):
+    def __call__(self, predict, target, env, reduction='mean'):
+        loss = nn.BCEWithLogitsLoss(reduction='none')(predict, target.float())
+        if reduction == 'none':
+            return loss
+        elif reduction == 'mean':
+            total_loss = 0
+            total_loss = loss.mean()
+            return total_loss
+        else:
+            raise NotImplementedError
       
 @loss_register.register
 class groupDRO(Loss):
@@ -477,20 +490,48 @@ def categorize_latent_samples(z):
 
 @loss_register.register
 class VAELoss(Loss):
-    def __init__(self, reconstruction_weight=1.0, kl_weight=0.1):
+    def __init__(self, reconstruction_weight=1.0, kl_weight=0.1, categorization_weight=1000.0):
         super(VAELoss, self).__init__()
         self.reconstruction_weight = reconstruction_weight
         self.kl_weight = kl_weight
+        self.categorization_weight = categorization_weight
         
-    def __call__(self, x, x_reconstructed, mu, log_var, reduction='mean'):
+    def __call__(self, x, x_reconstructed, mu, log_var, z, reduction='mean'):
         # Reconstruction loss (MSE)
         recon_loss = torch.nn.functional.mse_loss(x_reconstructed, x, reduction='none').sum(dim=1)
         
         # KL divergence loss
         kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
         
-        # Total loss
+        # Total base VAE loss
         total_loss = self.reconstruction_weight * recon_loss + self.kl_weight * kl_loss
+        
+        # Categorization loss
+        if self.categorization_weight > 0:
+            if z.shape[1] != 5:
+                # This loss is designed for a 5-dimensional latent space.
+                # You might want to raise an error or handle this differently if latent_dim is not 5.
+                pass # Or raise ValueError("Categorization loss (feature variance) requires latent_dim = 5")
+
+            sum_of_feature_variances = torch.tensor(0.0, device=z.device)
+            for i in range(z.shape[1]): # Iterate over each of the 5 latent dimensions
+                feature_values = z[:, i]
+                # Binarize: 1 if > 0.5, 0 if <= 0.5
+                bina_feature = (feature_values > 0.5).int()
+                
+                # Count occurrences of 0 and 1 for this feature
+                # counts will be a tensor like [count_of_0, count_of_1]
+                counts = torch.bincount(bina_feature, minlength=2).float()
+                
+                # Calculate variance of these two counts
+                if counts.numel() > 1: # Should always be 2 due to minlength=2
+                    feature_variance = torch.var(counts) / counts.sum() ** 2
+                else: # Should not happen with minlength=2
+                    feature_variance = torch.tensor(0.0, device=z.device)
+                sum_of_feature_variances += feature_variance
+            
+            categorization_loss_val = sum_of_feature_variances
+            total_loss = total_loss - self.categorization_weight * categorization_loss_val # Changed from subtraction to addition
         
         if reduction == 'none':
             return total_loss

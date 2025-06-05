@@ -206,7 +206,7 @@ class VAETrainer(object):
             x_reconstructed, mu, log_var, z = self._model(input_batch)
             
             # Calculate loss
-            loss = self._loss_fn(input_batch, x_reconstructed, mu, log_var)
+            loss = self._loss_fn(input_batch, x_reconstructed, mu, log_var, z)
             
             # Backward pass
             loss.backward()
@@ -243,7 +243,7 @@ class VAETrainer(object):
                 x_reconstructed, mu, log_var, z = self._model(input_batch)
                 
                 # Calculate loss
-                loss = self._loss_fn(input_batch, x_reconstructed, mu, log_var)
+                loss = self._loss_fn(input_batch, x_reconstructed, mu, log_var, z)
                 
                 total_loss += loss.item() * batch_size
                 total_samples += batch_size

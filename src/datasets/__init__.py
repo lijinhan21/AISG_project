@@ -11,6 +11,7 @@ from .four_env_colored_mnist import FourEnvColoredMNIST
 from .synthetic_folktables import SyntheticFolktablesDataset
 from .category_based_synthetic_folktables import CategoryBasedSyntheticFolktables
 from .four_env_synthetic_folktables import FourEnvSyntheticFolktables
+from .four_env_synthetic_folktables2 import FourEnvSyntheticFolktables2
 from .utils import color_grayscale_arr, plot_dataset_digits
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     'SyntheticFolktablesDataset', 
     'CategoryBasedSyntheticFolktables', 
     'FourEnvSyntheticFolktables',
+    'FourEnvSyntheticFolktables2',
     'color_grayscale_arr',
     'plot_dataset_digits'
 ] 

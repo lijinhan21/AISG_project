@@ -54,12 +54,7 @@ class FourEnvSyntheticFolktables(BaseFolktablesDataset):
         Returns:
             tuple: (features, target, env) where target is the income class and env is the environment (0-3)
         """
-        if isinstance(self.data_label_env_tuples, tuple):
-            features = self.data_label_env_tuples[0][index]
-            target = self.data_label_env_tuples[1][index]
-            env = self.data_label_env_tuples[2][index]
-        else:
-            features, target, env = self.data_label_env_tuples[index]
+        features, target, env = self.data_label_env_tuples[index]
 
         if self.transform is not None:
             features = self.transform(features)
@@ -102,17 +97,17 @@ class FourEnvSyntheticFolktables(BaseFolktablesDataset):
         male_low_income_idx = np.where((group == 1) & (labels == 0))[0]
         female_high_income_idx = np.where((group == 2) & (labels == 1))[0]
         female_low_income_idx = np.where((group == 2) & (labels == 0))[0]
-
-        male_low_income_idx = male_low_income_idx[:8000]
-        male_high_income_idx = male_high_income_idx[:50000]
-        female_low_income_idx = female_low_income_idx[:50000]
-        female_high_income_idx = female_high_income_idx[:8000]
         
         print(f"Original training data distribution:")
         print(f"Male low income: {len(male_low_income_idx)}")
         print(f"Male high income: {len(male_high_income_idx)}")
         print(f"Female low income: {len(female_low_income_idx)}")
         print(f"Female high income: {len(female_high_income_idx)}")
+        
+        male_low_income_idx = np.random.choice(male_low_income_idx, size=4000, replace=False)
+        male_high_income_idx = np.random.choice(male_high_income_idx, size=16000, replace=False)
+        female_low_income_idx = np.random.choice(female_low_income_idx, size=16000, replace=False)
+        female_high_income_idx = np.random.choice(female_high_income_idx, size=4000, replace=False)
         
         # Create four environments using ALL available data (no balancing)
         # Env 0: Male + Low Income, Env 1: Male + High Income
@@ -205,53 +200,49 @@ class FourEnvSyntheticFolktables(BaseFolktablesDataset):
             env_labels[final_val_idx]
         )
         
-        # Create test data using a different state for distribution shift
-        test_data_source = ACSDataSource(survey_year='2021', horizon='1-Year', survey='person')
-        test_raw_data = test_data_source.get_data(states=["WA", "OR", "NV", "NM", "CO", "UT", "AZ", "HI", "AK", "ID"], download=True)  # Different state for test
-        
-        # Convert test data to numpy arrays
-        test_features, test_labels, test_group = ACSIncomeNew.df_to_numpy(test_raw_data)
-        
-        # Create test environments with same mapping
-        test_male_high_income_idx = np.where((test_group == 1) & (test_labels == 1))[0]
-        test_male_low_income_idx = np.where((test_group == 1) & (test_labels == 0))[0]
-        test_female_high_income_idx = np.where((test_group == 2) & (test_labels == 1))[0]
-        test_female_low_income_idx = np.where((test_group == 2) & (test_labels == 0))[0]
-        
-        # Combine test environments
-        test_all_indices = np.concatenate([
-            test_male_low_income_idx, test_male_high_income_idx, 
-            test_female_low_income_idx, test_female_high_income_idx
-        ])
-        
-        test_env_labels = np.concatenate([
-            np.zeros(len(test_male_low_income_idx)),      # Env 0
-            np.ones(len(test_male_high_income_idx)),       # Env 1
-            np.full(len(test_female_low_income_idx), 2),   # Env 2
-            np.full(len(test_female_high_income_idx), 3)   # Env 3
-        ])
-        
-        # Shuffle test data
-        test_shuffle_indices = np.random.permutation(len(test_all_indices))
-        test_all_indices = test_all_indices[test_shuffle_indices]
-        test_env_labels = test_env_labels[test_shuffle_indices]
-        
-        # Convert test data to tensors
-        test_data = (
-            torch.FloatTensor(test_features[test_all_indices]),
-            torch.LongTensor(test_labels[test_all_indices]),
-            torch.LongTensor(test_env_labels)
-        )
-        
-        print(f"\nTest environment distribution:")
-        for env_id in range(4):
-            env_mask = (test_data[2] == env_id)
-            env_count = torch.sum(env_mask).item()
-            env_features = test_data[0][env_mask]
-            env_targets = test_data[1][env_mask]
-            high_income_count = torch.sum(env_targets == 1).item()
-            low_income_count = torch.sum(env_targets == 0).item()
-            print(f"Env {env_id}: {env_count} samples (High Income: {high_income_count}, Low Income: {low_income_count})")
+        # Load existing test data from synthetic_folktables instead of creating new one
+        synthetic_test_path = os.path.join(self.root, 'synthetic_folktables', 'test.pt')
+        if os.path.exists(synthetic_test_path):
+            print("Loading existing test dataset from synthetic_folktables")
+            loaded_test_data = torch.load(synthetic_test_path)
+            test_features, test_labels, _ = loaded_test_data  # Ignore original env labels
+            
+            # Remap to 4 environments based on gender and income
+            # Extract gender from features (SEX is at index 3, 1=Male, 2=Female)
+            test_gender = test_features[:, 3]  # SEX feature
+            
+            # Create new environment labels based on gender and income
+            test_env_labels = torch.zeros(len(test_features), dtype=torch.long)
+            for i in range(len(test_features)):
+                gender = test_gender[i].item()
+                income = test_labels[i].item()
+                if gender == 1 and income == 0:  # Male + Low Income
+                    test_env_labels[i] = 0
+                elif gender == 1 and income == 1:  # Male + High Income
+                    test_env_labels[i] = 1
+                elif gender == 2 and income == 0:  # Female + Low Income
+                    test_env_labels[i] = 2
+                elif gender == 2 and income == 1:  # Female + High Income
+                    test_env_labels[i] = 3
+            
+            test_data = (test_features, test_labels, test_env_labels)
+            
+            print(f"Loaded test data with {len(test_features)} samples")
+            
+            # Print test environment distribution after remapping
+            print(f"\nTest environment distribution (loaded from synthetic_folktables):")
+            for env_id in range(4):
+                env_mask = (test_env_labels == env_id)
+                env_count = torch.sum(env_mask).item()
+                if env_count > 0:
+                    env_targets = test_labels[env_mask]
+                    high_income_count = torch.sum(env_targets == 1).item()
+                    low_income_count = torch.sum(env_targets == 0).item()
+                    print(f"Env {env_id}: {env_count} samples (High Income: {high_income_count}, Low Income: {low_income_count})")
+                else:
+                    print(f"Env {env_id}: 0 samples")
+        else:
+            raise FileNotFoundError(f"Test dataset not found at {synthetic_test_path}. Please ensure synthetic_folktables dataset is prepared first.")
         
         # Create directory and save datasets
         four_env_dir = self._create_data_dir('four_env_synthetic_folktables')
