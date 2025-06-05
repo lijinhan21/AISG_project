@@ -1,21 +1,25 @@
 # Exploring the Effect of Environment Partitioning and Data Balancing on Out-of-Distribution Generalization
 
-《人工智能安全于治理技术前沿》大作业：如何构建“好”的学习数据？探究环境划分与数据平衡在分布外泛化任务中的效果
+《人工智能安全与治理技术前沿》大作业：如何构建“好”的学习数据？探究环境划分与数据平衡在分布外泛化任务中的效果
 
 For details of the project, please refer to the [project report](./report.pdf).
 
 ## Installation
 
 ```
+git clone https://github.com/lijinhan21/OOD-Data-Study.git
+cd OOD-Data-Study
+
 conda create -n aigsp python=3.9
-pip install -r requirements.txt
+cd src && pip install -r requirements.txt
 ```
 
 ## Usage
 
 To run all experiments, you can use the provided script:
 ```
-sh run.sh
+cd src
+sh experiments/run.sh
 ```
 
 This includes:
@@ -43,4 +47,4 @@ Plotting training curves and results is done in `src/plot/plot.ipynb`.
 
 ---
 
-This repository is based on the codebase of AISG hw2. 
+This repository is based on the codebase of AIGS hw2. 
