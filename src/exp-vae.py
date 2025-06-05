@@ -41,7 +41,7 @@ parser.add_argument('--categorization_weight', default=1000.0, type=float)
 parser.add_argument('--save_model', action='store_true')
 parser.add_argument('--save_path', default='./saved_models', type=str)
 parser.add_argument('--task', default='ColoredMNIST', type=str, 
-                    choices=['ColoredMNIST', 'Folktables', 'SyntheticFolktables'])
+                    choices=['ColoredMNIST', 'SyntheticFolktables'])
 
 args = parser.parse_args()
 print(args)
@@ -67,10 +67,6 @@ elif args.task == 'SyntheticFolktables':
     transform = lambda x: (x - mean) / std
     download = SyntheticFolktablesDataset(root=args.dataset_path, env='all_train', transform=transform)
     args.dataset_path = os.path.join(args.dataset_path, 'synthetic_folktables')
-    
-elif args.task == 'Folktables':
-    download = FolktablesDataset(root=args.dataset_path, env='all_train')
-    args.dataset_path = os.path.join(args.dataset_path, 'folktables')
 
 def run_vae():
     device = torch.device('cuda' if torch.cuda.is_available() and not args.no_cuda else 'cpu')

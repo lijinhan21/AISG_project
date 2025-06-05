@@ -30,7 +30,7 @@ parser.add_argument('--hidden_dim', default=[128, 64], type=int, nargs='+')
 parser.add_argument('--latent_dim', default=5, type=int)
 parser.add_argument('--sample_per_category', default=5, type=int, help='Number of samples to visualize per category')
 parser.add_argument('--task', default='ColoredMNIST', type=str, 
-                    choices=['ColoredMNIST', 'Folktables', 'SyntheticFolktables'])
+                    choices=['ColoredMNIST', 'SyntheticFolktables'])
 
 args = parser.parse_args()
 print(args)
@@ -44,8 +44,6 @@ if args.task == 'ColoredMNIST':
     args.dataset_path = os.path.join(args.dataset_path, 'ColoredMNIST')
 elif args.task == 'SyntheticFolktables':
     args.dataset_path = os.path.join(args.dataset_path, 'synthetic_folktables')
-elif args.task == 'Folktables':
-    args.dataset_path = os.path.join(args.dataset_path, 'folktables')
 
 # Create output directory
 output_dir = Path(args.output_dir)

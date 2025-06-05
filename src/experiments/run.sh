@@ -3,8 +3,8 @@
 seed=1804
 
 # Baselines
-sh run_cmnist.sh
-sh run_synthetic_folktables.sh
+sh experiments/run_cmnist.sh
+sh experiments/run_synthetic_folktables.sh
 
 # VAE experiments with 5D latent space and categorization
 # For ColoredMNIST
@@ -29,5 +29,5 @@ python exp.py --seed $seed --trainer InvRat --task CategoryBasedSyntheticFolktab
 
 
 # Manually Divided Four Environment experiments
-sh run_fourenv_cmnist.sh
-sh run_fourenv_synthetic_folktables.sh
+sh experiments/run_fourenv_cmnist.sh
+sh experiments/run_fourenv_synthetic_folktables.sh
